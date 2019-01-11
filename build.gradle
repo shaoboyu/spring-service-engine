@@ -1,0 +1,96 @@
+buildscript {
+    project.ext {
+        if (!project.hasProperty("nexusUser")) {
+            nexusUser = 'deployment'
+        }
+        if (!project.hasProperty("nexusPass")) {
+            nexusPass = 'deployment123'
+        }
+        nexusBaseUrl = 'http://repo.feinno.com/nexus/content'
+        privateRepo = { return { url "${nexusBaseUrl}/groups/public/" } }
+        uploadRepo = {
+            maven {
+                url "$nexusBaseUrl/repositories/${project.version.endsWith('-SNAPSHOT') ? 'snapshots' : 'releases'}"
+                credentials { username nexusUser; password nexusPass }
+            }
+        }
+        repoClosure = {
+            maven privateRepo()
+            mavenCentral()
+            mavenLocal()
+        }
+    }
+    ext {
+        springBootVersion = spring_boot_version
+    }
+
+    repositories project.repoClosure
+
+    dependencies {
+        classpath "com.feinno.gradle:tsp-gradle-plugin:1.0-SNAPSHOT"
+        classpath "com.feinno.gradle:utils-plugin:1.0-SNAPSHOT"
+    }
+}
+
+allprojects { project ->
+
+    project.repositories rootProject.repoClosure
+
+    group = 'com.feinno'
+    apply plugin: 'com.feinno.utils.version'
+
+    versionTailConfig {
+        defaultMode = 'release'
+    }
+    version = "3.0.0${versionTail()}"
+
+    task wrapper(type: Wrapper) {
+        gradleVersion = '2.4'
+    }
+
+    apply plugin: 'java'
+    apply plugin: 'maven-publish'
+    apply plugin: 'com.feinno.tsp.release'
+    publishing {
+        repositories rootProject.uploadRepo
+    }
+}
+
+subprojects {
+
+    tasks.withType(JavaCompile) {
+        sourceCompatibility = 1.8
+        options.encoding = "UTF-8"
+    }
+    tasks.withType(Test) {
+        defaultCharacterEncoding = "UTF-8"
+    }
+
+    dependencies {
+        testCompile "junit:junit:$junit_version"
+    }
+
+    task sourceJar(type: Jar) {
+        classifier = 'sources'
+        from sourceSets.main.allJava
+    }
+
+    publishing {
+        publications {
+//            maven(MavenPublication) {
+//                from components.java
+//                artifact sourceJar
+//            }
+        }
+    }
+}
+sourceCompatibility = 1.8
+tspRelease {
+    packageRootJar = false
+}
+
+tspDeploy {
+    location='ott-functional-test'
+    args target : '10.10.220.103' // 部署目标服务器 minionId，多个目标可用逗号分割
+    args sls_repo: 'urcs' // sls 文件源 （作用类似之前的 namespace 参数）
+}
